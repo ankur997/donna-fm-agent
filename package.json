@@ -1,0 +1,24 @@
+{
+  "name": "donna-fm-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone Donna FM agent — twice-daily curated YouTube recommendations via WhatsApp for AJ. Runs separately from Mission Control so a Donna FM bug/outage can never take the main dashboard down.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "send:once": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.1",
+    "dotenv": "^16.4.5",
+    "googleapis": "^144.0.0",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4"
+  }
+}
