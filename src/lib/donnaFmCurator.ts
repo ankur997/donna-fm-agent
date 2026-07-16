@@ -198,7 +198,7 @@ export async function curateRecommendations(
   });
 
   // De-dupe vs last 30 days — by URL, title, AND speaker/topicKey (cross-channel)
-  const cutoffMs = Date.now() - 14 * 24 * 60 * 60 * 1000; // 14 days — prevents speaker exhaustion
+  const cutoffMs = Date.now() - 9 * 24 * 60 * 60 * 1000; // 9 days — 14d exhausted the candidate pool within ~5 days (2026-07-16 incident)
   const recent = loadSentHistory().filter((r) => new Date(r.sentAt).getTime() >= cutoffMs);
   const sentUrls = new Set<string>();
   const sentTitles = new Set<string>();

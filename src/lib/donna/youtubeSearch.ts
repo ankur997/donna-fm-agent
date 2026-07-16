@@ -76,7 +76,7 @@ interface ChannelListItem {
  */
 export async function searchYouTubeCandidates(
   queries: string[],
-  perQuery = 8
+  perQuery = 25
 ): Promise<SearchedVideo[]> {
   const token = await getRefreshedYouTubeToken();
   if (!token) {
@@ -91,7 +91,13 @@ export async function searchYouTubeCandidates(
   // 1. Collect video IDs from each search (order=viewCount → most-viewed first)
   const idSet = new Set<string>();
   const uniqueQueries = Array.from(new Set(queries.filter(Boolean))).slice(0, 18);
-  for (const q of uniqueQueries) {
+  for (let i = 0; i < uniqueQueries.length; i++) {
+    const q = uniqueQueries[i];
+    // Small spacing between sequential search calls — a burst of ~18-27 calls in
+    // quick succession was tripping YouTube's short-window rate limit (429s seen
+    // 2026-07-16), silently shrinking the candidate pool on top of the 14-day
+    // dedup exhaustion that was the main cause of the single-recommendation bug.
+    if (i > 0) await new Promise((r) => setTimeout(r, 300));
     const data = await ytGet<{ items: SearchListItem[] }>(
       `/search?part=snippet&type=video&order=viewCount&relevanceLanguage=en` +
         `&publishedAfter=${encodeURIComponent(publishedAfter)}` +
