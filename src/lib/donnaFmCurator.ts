@@ -9,6 +9,7 @@
 import fs from "fs";
 import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
+import { looksLikeAI } from "./donna/sources.js";
 
 // ── Storage ────────────────────────────────────────────────────────────────────
 const DATA_DIR   = path.join(process.cwd(), "data");
@@ -188,6 +189,54 @@ function sanitize(str: string): string {
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
 }
 
+/**
+ * Hard-caps AI-topic picks at `maxAi` per batch (default 1). Content-based check
+ * (title/description via looksLikeAI), independent of Claude's own topic labels,
+ * so the cap holds even if a pick gets mislabeled. Backfills dropped slots from
+ * the remaining candidate pool, respecting speaker-uniqueness. Applied uniformly
+ * to both the Claude-curated path and the velocity fallback (2026-08-03 — the
+ * feed had become AI-dominated, this is the deterministic backstop for the
+ * prompt-level hard rule).
+ */
+function enforceAiCap(
+  picks: RecommendationItem[],
+  candidates: CurationCandidate[],
+  maxAi = 1
+): RecommendationItem[] {
+  let aiCount = 0;
+  const kept: RecommendationItem[] = [];
+  for (const p of picks) {
+    const isAiPick = looksLikeAI(p.title, p.summary);
+    if (isAiPick && aiCount >= maxAi) continue;
+    if (isAiPick) aiCount++;
+    kept.push(p);
+  }
+
+  if (kept.length < 3) {
+    const keptUrls = new Set(kept.map((k) => k.url.trim()));
+    const keptSpeakers = new Set(kept.map((k) => normKey(k.speaker || k.source)));
+    for (const c of candidates) {
+      if (kept.length >= 3) break;
+      if (keptUrls.has(c.url.trim())) continue;
+      const spk = normKey(c.source);
+      if (keptSpeakers.has(spk)) continue;
+      const isAiPick = looksLikeAI(c.title, c.description);
+      if (isAiPick && aiCount >= maxAi) continue;
+      if (isAiPick) aiCount++;
+      keptUrls.add(c.url.trim());
+      keptSpeakers.add(spk);
+      kept.push({
+        slot: (kept.length + 1) as 1 | 2 | 3,
+        title: c.title, source: c.source, summary: c.description.slice(0, 120),
+        url: c.url, type: "youtube", topics: [], speaker: c.source,
+        topicKey: normKey(c.title).split(" ").slice(0, 4).join(" "),
+      });
+    }
+  }
+
+  return kept.slice(0, 3).map((p, i) => ({ ...p, slot: (i + 1) as 1 | 2 | 3 }));
+}
+
 export async function curateRecommendations(
   slot: "morning" | "evening",
   candidatesIn: CurationCandidate[]
@@ -254,13 +303,18 @@ export async function curateRecommendations(
   const msg = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 1000,
-    system: `You are Donna FM, a recommendation curator for AJ — Co-Founder & CBO of Sunstone (Indian edtech). AJ listens to long-form YouTube during commutes/workouts.
-Allowed topics ONLY: world politics, technology, education & innovation, AI, leadership, business, venture capital (VCs), private equity (PEs). Reject anything off-topic or entertainment.
+    system: `You are Donna FM, a recommendation curator for AJ — Co-Founder & CBO of Sunstone (Indian edtech). AJ thinks and operates like a business leader, a business commentator, a policy-watcher, a hardcore operator, and a people manager — someone who believes better-run businesses make the world better, and who has to keep updating his own thinking to stay sharp. AJ listens to long-form YouTube during commutes/workouts.
+
+Allowed topics ONLY: world politics, technology, education & innovation, AI, leadership, business, venture capital (VCs), private equity (PEs), people management & org leadership, policy & regulation, operations & execution excellence, purpose-driven business / social impact, innovation, history. Reject anything off-topic or entertainment.
+
+HARD RULE: at most 1 of the 3 picks may be primarily about AI. The feed had become AI-dominated and AJ wants the mix genuinely broadened across the other topics — do not exceed 1 AI pick even if more AI candidates look strong.
+
 ${slot === "morning" ? "Morning: energising, strategic, big-picture." : "Evening: reflective, deep dives, slower-paced."}
+
 For each pick, identify the primary SPEAKER/guest (the person, e.g. "Sam Altman"), and a short TOPIC KEY (3-5 words capturing the core subject, e.g. "AI scaling laws"). These are used to avoid repeating the same speaker or topic across different channels.`,
     messages: [{
       role: "user",
-      content: `AJ's preferences:\n${sanitize(likes)}\n\nEXCLUSIONS:\n${sanitize(avoid) || "(none yet)"}\n\nCandidates:\n${sanitize(candidateList)}\n\nPick the best 3 for AJ's ${slot} listen. The 3 picks must each have a DISTINCT speaker AND distinct topic from one another, and must NOT match any excluded/recently-featured speaker or topic. For each write a punchy 20-25 word summary. Return ONLY a JSON array:\n[{"slot":1,"index":N,"speaker":"...","topicKey":"...","summary":"...","topics":["t1","t2"]}, ...]`,
+      content: `AJ's preferences:\n${sanitize(likes)}\n\nEXCLUSIONS:\n${sanitize(avoid) || "(none yet)"}\n\nCandidates:\n${sanitize(candidateList)}\n\nPick the best 3 for AJ's ${slot} listen — at most 1 may be AI-topic (hard rule). The 3 picks must each have a DISTINCT speaker AND distinct topic from one another, and must NOT match any excluded/recently-featured speaker or topic. For each write a punchy 20-25 word summary that goes beyond describing the content — state why it matters for someone operating as a business leader, policy-watcher, operator, or people manager (the "so what for AJ"), not just what the video covers. Return ONLY a JSON array:\n[{"slot":1,"index":N,"speaker":"...","topicKey":"...","summary":"...","topics":["t1","t2"]}, ...]`,
     }],
   });
 
@@ -285,7 +339,7 @@ For each pick, identify the primary SPEAKER/guest (the person, e.g. "Sam Altman"
     return picks;
   };
 
-  if (!match) return fallback();
+  if (!match) return enforceAiCap(fallback(), candidates);
   try {
     const picks: Array<{ slot: 1|2|3; index: number; speaker: string; topicKey: string; summary: string; topics: string[] }> = JSON.parse(match[0]);
     const results = picks
@@ -304,9 +358,9 @@ For each pick, identify the primary SPEAKER/guest (the person, e.g. "Sam Altman"
           topicKey: p.topicKey || "",
         };
       });
-    return results.length > 0 ? results : fallback();
+    return enforceAiCap(results.length > 0 ? results : fallback(), candidates);
   } catch {
-    return fallback();
+    return enforceAiCap(fallback(), candidates);
   }
 }
 

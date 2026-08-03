@@ -48,5 +48,18 @@ log("Scheduled: 9:00 AM and 7:00 PM IST daily");
   }
 }
 
+// Startup catch-up for evening slot: if process restarts between 7:00 PM and 9:00 PM IST,
+// send the evening batch now. sendRecommendations() dedupes, so safe if already sent.
+{
+  const nowIST2 = new Date().toLocaleString("en-US", { timeZone: TZ });
+  const istDate2 = new Date(nowIST2);
+  const istHour2 = istDate2.getHours();
+  const istMin2 = istDate2.getMinutes();
+  if ((istHour2 > 19 || (istHour2 === 19 && istMin2 >= 0)) && istHour2 < 21) {
+    log("Started after 7 PM IST — checking if evening send needs catch-up...");
+    setTimeout(() => runSlot("evening"), 30_000);
+  }
+}
+
 // Keep the process alive.
 process.stdin.resume();

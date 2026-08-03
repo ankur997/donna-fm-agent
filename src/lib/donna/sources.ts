@@ -10,10 +10,19 @@ export const TOPIC_QUERIES: Record<string, string[]> = {
   "technology":                ["technology deep dive", "future of technology talk"],
   "education and innovation":  ["future of education", "education innovation talk", "edtech keynote"],
   "ai":                        ["artificial intelligence interview", "AI strategy talk", "frontier AI research discussion"],
-  "leadership":                ["leadership keynote", "CEO leadership interview"],
+  "leadership":                ["leadership keynote", "CEO leadership interview", "Gokul Rajaram interview", "Gokul Rajaram podcast"],
   "business":                  ["business strategy interview", "scaling company founder talk"],
   "venture capital":           ["venture capital interview", "VC investing thesis"],
   "private equity":            ["private equity interview", "buyout investing discussion"],
+  // ── Added 2026-08-03: AJ wants the mix broadened beyond AI/VC — think like a
+  // leader, business commentator, policy-watcher, hardcore operator, and people
+  // manager who has to keep updating himself.
+  "people management":         ["people management strategies talk", "org leadership culture interview", "team building executive talk"],
+  "policy and regulation":     ["regulatory policy analysis", "government policy business impact", "public policy talk"],
+  "operations and execution":  ["operational excellence talk", "scaling operations interview", "execution strategy leadership"],
+  "purpose driven business":   ["purpose driven business talk", "social impact business interview", "conscious capitalism talk"],
+  "innovation":                ["innovation strategy talk", "disruptive innovation interview"],
+  "history":                   ["geopolitical history analysis", "history lessons leadership", "empire history interview"],
 };
 
 // ── Respected channels / speakers (the allowlist) ───────────────────────────────
@@ -58,6 +67,22 @@ export const RESPECTED_CHANNELS: RespectedChannel[] = [
   { name: "World Economic Forum",       topics: ["world politics", "leadership"] },
   { name: "Council on Foreign Relations", topics: ["world politics"] },
   { name: "Carnegie Endowment",         topics: ["world politics"] },
+  // People management / org leadership
+  { name: "Simon Sinek",                topics: ["people management", "leadership"] },
+  { name: "Masters of Scale",           topics: ["people management", "leadership", "business"] },
+  { name: "First Round Review",         topics: ["people management", "business"] },
+  // Policy & regulation
+  { name: "Brookings Institution",      topics: ["policy and regulation", "world politics"] },
+  // Operations & execution excellence
+  { name: "McKinsey & Company",         topics: ["operations and execution", "business"] },
+  { name: "How I Built This",           topics: ["operations and execution", "business"] },
+  // Purpose-driven business / social impact
+  { name: "Skoll Foundation",           topics: ["purpose driven business"] },
+  // Innovation
+  { name: "Fast Company",               topics: ["innovation", "technology"] },
+  // History (geopolitical/business-relevant, not general entertainment history)
+  { name: "Hardcore History Podcast by Dan Carlin", topics: ["history"] },
+  { name: "Empire • World History",     topics: ["history", "world politics"] },
   // India ecosystem (AJ-relevant)
   { name: "Raj Shamani",                topics: ["business", "leadership"] },
   { name: "Prime Venture Partners",     topics: ["venture capital"] },
@@ -117,4 +142,15 @@ const NON_LATIN_PATTERN = /[\u0900-\u097F\u0980-\u09FF\u0A00-\u0A7F\u0A80-\u0AFF
 /** Returns true if title or channelName contains non-Latin script characters. */
 export function looksLikeNonEnglish(title: string, channelName: string): boolean {
   return NON_LATIN_PATTERN.test(title) || NON_LATIN_PATTERN.test(channelName);
+}
+
+// ── AI hard-cap detection ───────────────────────────────────────────────────────
+// AJ wants at most 1 AI-topic pick per batch — the mix had become AI-dominated.
+// This is a content-based check (title/description), independent of whatever
+// topic label Claude assigns, so the cap can't be talked around.
+const AI_REGEX = /\b(ai|artificial intelligence|chatgpt|openai|anthropic|claude|gemini|llm|large language model|machine learning|generative ai|gpt-\d|agi|neural network)\b/i;
+
+/** Returns true if title/description reads as AI-topic content. */
+export function looksLikeAI(title: string, description: string): boolean {
+  return AI_REGEX.test(`${title} ${description}`);
 }
