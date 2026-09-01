@@ -10,7 +10,7 @@ export const TOPIC_QUERIES: Record<string, string[]> = {
   "technology":                ["technology deep dive", "future of technology talk"],
   "education and innovation":  ["future of education", "education innovation talk", "edtech keynote"],
   "ai":                        ["artificial intelligence interview", "AI strategy talk", "frontier AI research discussion"],
-  "leadership":                ["leadership keynote", "CEO leadership interview", "Gokul Rajaram interview", "Gokul Rajaram podcast"],
+  "leadership":                ["leadership keynote", "CEO leadership interview"],
   "business":                  ["business strategy interview", "scaling company founder talk"],
   "venture capital":           ["venture capital interview", "VC investing thesis"],
   "private equity":            ["private equity interview", "buyout investing discussion"],
@@ -24,6 +24,103 @@ export const TOPIC_QUERIES: Record<string, string[]> = {
   "innovation":                ["innovation strategy talk", "disruptive innovation interview"],
   "history":                   ["geopolitical history analysis", "history lessons leadership", "empire history interview"],
 };
+
+// ── Followed people (added 2026-09-01) ──────────────────────────────────────────
+// Named individuals AJ wants tracked directly, sourced from:
+//  (a) the "Emerging Thinkers" research report (2026-08-28) — 48 confirmed names
+//      across all 8 categories + 6 unverified leads, all included per AJ's review
+//      ("all 8 categories, no exclusions" / "yes, include unverified leads too").
+//  (b) Akashwani's own watchlist (memory/watchlist.json) — 11 new names, excluding
+//      Gokul Rajaram (already tracked below) and 2 unconfirmed handles (mmjukic,
+//      kmr_dilip) which AJ chose to skip.
+// One query per person ("{name} interview") — deliberately not 2, given the
+// volume here; see the interleaving note in send.ts's buildQueries().
+export interface FollowedPerson { name: string; category: string; }
+
+export const FOLLOWED_PEOPLE: FollowedPerson[] = [
+  // Emerging Thinkers — Academics
+  { name: "Rohit Lamba", category: "academics" },
+  { name: "Shoumitro Chatterjee", category: "academics" },
+  { name: "Pranay Kotasthane", category: "academics" },
+  { name: "Chinmay Tumbe", category: "academics" },
+  { name: "Alice Evans", category: "academics" },
+  { name: "Regina Rini", category: "academics" },
+  { name: "Pavithra Suryanarayan", category: "academics" },
+  { name: "Neelanjan Sircar", category: "academics" },
+  { name: "Musa al-Gharbi", category: "academics" },
+  // Emerging Thinkers — Research / Science
+  { name: "Shreya Shankar", category: "research" },
+  { name: "Jae-Won Chung", category: "research" },
+  { name: "Vasisht Duddu", category: "research" },
+  { name: "Payal Mohapatra", category: "research" },
+  { name: "Alex Cohen", category: "research" },
+  { name: "Julia Bauman", category: "research" },
+  { name: "Soumitra Athavale", category: "research" },
+  { name: "Aditi Krishnapriyan", category: "research" },
+  { name: "Josefina del Mármol", category: "research" },
+  // Emerging Thinkers — Innovation
+  { name: "Mufeed VH", category: "innovation" },
+  { name: "Syed Affan", category: "innovation" },
+  { name: "Tarini Padmanabhuni", category: "innovation" },
+  { name: "CVS Kiran", category: "innovation" },
+  { name: "Mahmoud Wagih", category: "innovation" },
+  { name: "Alalea Kia", category: "innovation" },
+  // Emerging Thinkers — Business
+  { name: "Evan Armstrong", category: "business" },
+  { name: "Rex Woodbury", category: "business" },
+  { name: "Ravi Mehta", category: "business" },
+  { name: "Amit Somani", category: "business" },
+  { name: "Anu Atluru", category: "business" },
+  { name: "Kevin Kwok", category: "business" },
+  // Emerging Thinkers — Philosophy
+  { name: "Joe Carlsmith", category: "philosophy" },
+  { name: "L.M. Sacasas", category: "philosophy" },
+  { name: "Rebecca Lowe", category: "philosophy" },
+  { name: "Victor Kumar", category: "philosophy" },
+  { name: "Robert Long", category: "philosophy" },
+  { name: "Shaj Mohan", category: "philosophy" },
+  // Emerging Thinkers — Authors
+  { name: "Aparajith Ramnath", category: "authors" },
+  { name: "Saharu Nusaiba Kannanari", category: "authors" },
+  { name: "Zilla Jones", category: "authors" },
+  { name: "Maggie Millner", category: "authors" },
+  { name: "Alexander Sammartino", category: "authors" },
+  { name: "Stacie Shannon Denetsosie", category: "authors" },
+  { name: "Edie May Hand", category: "authors" },
+  // Emerging Thinkers — Politicians
+  { name: "Rui Xu", category: "politicians" },
+  { name: "Alexis Calatayud", category: "politicians" },
+  { name: "Josh MacAlister", category: "politicians" },
+  { name: "Nesil Caliskan", category: "politicians" },
+  { name: "Sam O'Connor", category: "politicians" },
+  // Emerging Thinkers — Unverified leads (included per AJ's answer)
+  { name: "Karan Gupta", category: "unverified" },
+  { name: "Siddharth Tripathi", category: "unverified" },
+  { name: "Pranjali Awasthi", category: "unverified" },
+  { name: "Aidan Guo", category: "unverified" },
+  { name: "Pranavan", category: "unverified" },
+  { name: "Namanyay Goel", category: "unverified" },
+  // Akashwani watchlist — new additions (Gokul Rajaram already tracked below;
+  // mmjukic / kmr_dilip skipped — unconfirmed handles per AJ's answer)
+  { name: "Mark J. Perry", category: "akashwani" },
+  { name: "Ray Dalio", category: "akashwani" },
+  { name: "Dan Koe", category: "akashwani" },
+  { name: "Michael Saylor", category: "akashwani" },
+  { name: "Dan Peña", category: "akashwani" },
+  { name: "Shane Parrish", category: "akashwani" },
+  { name: "Adam Grant", category: "akashwani" },
+  { name: "Ruben Harris", category: "akashwani" },
+  { name: "Chamath Palihapitiya", category: "akashwani" },
+  { name: "Elon Musk", category: "akashwani" },
+  { name: "Naval Ravikant", category: "akashwani" },
+  // Already tracked (moved out of TOPIC_QUERIES.leadership for consistency)
+  { name: "Gokul Rajaram", category: "leadership" },
+];
+
+/** One search query per followed person: "{name} interview". */
+export function followedPeopleQueries(): string[] {
+  return FOLLOWED_PEOPLE.map((p) => `${p.name} interview`);
+}
 
 // ── Respected channels / speakers (the allowlist) ───────────────────────────────
 // Match is by channelTitle (case-insensitive substring). Add channelId later if you
@@ -91,6 +188,18 @@ export const RESPECTED_CHANNELS: RespectedChannel[] = [
   { name: "Moneycontrol",               topics: ["business"] },
   { name: "Nikhil Kamath",              topics: ["business", "venture capital"] },
   { name: "WTF is with Nikhil Kamath",  topics: ["business"] },
+  // Podcasts/channels that actually host the "Emerging Thinkers" roster above —
+  // without these, search hits for those names would still get filtered out at
+  // the quality gate (most are niche, well under the 100k-subscriber fallback).
+  { name: "Ideas of India",             topics: ["emerging thinkers", "academics"] },
+  { name: "Mercatus Center",            topics: ["emerging thinkers", "policy and regulation"] },
+  { name: "Conversations with Tyler",   topics: ["emerging thinkers", "academics", "business"] },
+  { name: "Marginal Revolution",        topics: ["emerging thinkers", "academics"] },
+  { name: "80,000 Hours",               topics: ["emerging thinkers", "purpose driven business"] },
+  { name: "Puliyabaazi",                topics: ["emerging thinkers", "policy and regulation"] },
+  { name: "My Worst Investment Ever",   topics: ["emerging thinkers", "business"] },
+  { name: "Then Do Better",             topics: ["emerging thinkers", "purpose driven business"] },
+  { name: "New Books Network",          topics: ["emerging thinkers", "authors"] },
 ];
 
 // ── Entertainment / low-signal exclusions ──────────────────────────────────────

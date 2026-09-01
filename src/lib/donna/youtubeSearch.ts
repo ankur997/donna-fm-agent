@@ -90,7 +90,25 @@ export async function searchYouTubeCandidates(
 
   // 1. Collect video IDs from each search (order=viewCount → most-viewed first)
   const idSet = new Set<string>();
-  const uniqueQueries = Array.from(new Set(queries.filter(Boolean))).slice(0, 18);
+  // Cap raised 18 → 30 (2026-09-01, AJ: "just raise the flat cap") to make room
+  // for the 67-person followed-people list added the same day.
+  // MEASURED, not assumed: hit a live 429 while testing at cap=45 — this Google
+  // Cloud project's real ceiling is `defaultSearchListPerDayPerProject` = 100
+  // search.list CALLS/day (not the theoretical 10,000-unit budget I'd assumed;
+  // in practice they're the same number since search.list is ~100 units/call and
+  // is nearly all of this project's YouTube usage). 45 queries × 2 runs/day = 90
+  // calls left just 10 calls of margin for the day — one retry, one manual
+  // dry-run, or one startup-catch-up double-fire (src/index.ts has a 7-9PM
+  // evening catch-up window) would blow the budget and silently kill search for
+  // the rest of the day. 30 queries × 2 runs/day = 60 (normal day), 30 × 3 = 90
+  // even on a rare 3-run catch-up day — real margin either way.
+  // Durable fix if more headroom is needed later: request a quota increase at
+  // https://cloud.google.com/docs/quotas/help/request_increase (same underlying
+  // fix as publishing the OAuth consent screen — this project is still on
+  // Google's low default tier). Queries are interleaved across followed-people/
+  // taste/topic in send.ts's buildQueries() before this cap is applied, so every
+  // group still gets a fair slice regardless of the cap's exact value.
+  const uniqueQueries = Array.from(new Set(queries.filter(Boolean))).slice(0, 30);
   for (let i = 0; i < uniqueQueries.length; i++) {
     const q = uniqueQueries[i];
     // Small spacing between sequential search calls — a burst of ~18-27 calls in

@@ -18,7 +18,7 @@ import {
 } from "./lib/donnaFmCurator.js";
 import { searchYouTubeCandidates } from "./lib/donna/youtubeSearch.js";
 import { getTasteProfile } from "./lib/donna/tasteProfile.js";
-import { TOPIC_QUERIES } from "./lib/donna/sources.js";
+import { TOPIC_QUERIES, followedPeopleQueries } from "./lib/donna/sources.js";
 import { logYouTubeItem, extractVideoId } from "./lib/donna/youtube-log.js";
 
 async function sendTwilioWhatsApp(to: string, body: string): Promise<{ ok: boolean; error?: string }> {
@@ -39,8 +39,30 @@ async function sendTwilioWhatsApp(to: string, body: string): Promise<{ ok: boole
   return { ok: true };
 }
 
-/** Build the full search query set: AJ's fixed topics + taste-derived queries. */
+/**
+ * Round-robin merge of several query lists, taking one query from each list in
+ * turn until all are exhausted. Added 2026-09-01: with the followed-people list
+ * (67 names) added on top of taste + topic queries, plain concatenation would let
+ * whichever list comes first fully consume the downstream 45-query cap and starve
+ * the others — same failure mode as the "only 1 recommendation" bug, just moved.
+ * AJ chose "just raise the flat cap, no rotation" (no rotation across days/runs),
+ * but within a single run we still need every group represented once ordering hits
+ * the cap — that's what this does; it isn't day-based rotation.
+ */
+function interleave(lists: string[][]): string[] {
+  const out: string[] = [];
+  const maxLen = Math.max(0, ...lists.map((l) => l.length));
+  for (let i = 0; i < maxLen; i++) {
+    for (const list of lists) {
+      if (i < list.length) out.push(list[i]);
+    }
+  }
+  return out;
+}
+
+/** Build the full search query set: followed people + AJ's fixed topics + taste-derived queries. */
 async function buildQueries(): Promise<string[]> {
+  const peopleQueries = followedPeopleQueries();
   const topicQueries = Object.values(TOPIC_QUERIES).flat();
   let tasteQueries: string[] = [];
   try {
@@ -49,7 +71,7 @@ async function buildQueries(): Promise<string[]> {
   } catch (e) {
     console.warn("[DonnaFM] taste profile unavailable:", e);
   }
-  return Array.from(new Set([...tasteQueries, ...topicQueries]));
+  return Array.from(new Set(interleave([peopleQueries, tasteQueries, topicQueries])));
 }
 
 export interface SendResult {
