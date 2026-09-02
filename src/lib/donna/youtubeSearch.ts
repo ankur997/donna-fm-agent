@@ -77,6 +77,11 @@ interface VideoListItem {
     title?: string; description?: string; publishedAt?: string;
     channelId?: string; channelTitle?: string;
     thumbnails?: { medium?: { url?: string } };
+    // YouTube's own language tags. Already returned by part=snippet at no extra
+    // quota cost, but ignored until 2026-09-02 — which is how a Russian video
+    // explicitly tagged defaultAudioLanguage:"ru" got recommended.
+    defaultLanguage?: string;
+    defaultAudioLanguage?: string;
   };
   contentDetails?: { duration?: string };
   statistics?: { viewCount?: string };
@@ -222,6 +227,8 @@ export async function searchYouTubeCandidates(
     const channelId = v.snippet?.channelId ?? "";
     const channelName = v.snippet?.channelTitle ?? "";
     const publishedAt = v.snippet?.publishedAt ?? "";
+    const declaredLanguage =
+      v.snippet?.defaultAudioLanguage ?? v.snippet?.defaultLanguage ?? null;
     if (!id || !title || !publishedAt) continue;
 
     const durationSeconds = parseDuration(v.contentDetails?.duration ?? "");
@@ -242,8 +249,10 @@ export async function searchYouTubeCandidates(
     if (viewsPerDay < THRESHOLDS.MIN_VIEWS_PER_DAY) continue;
     // Entertainment / low-signal
     if (looksLikeEntertainment(title, description)) continue;
-    // Language filter — only English content
-    if (looksLikeNonEnglish(title, channelName)) continue;
+    // Language filter — only English content. Checks YouTube's declared
+    // language first (authoritative, and catches Latin-script foreign
+    // languages), then falls back to the non-Latin script test.
+    if (looksLikeNonEnglish(title, channelName, declaredLanguage)) continue;
     // Respected source gate
     if (!passesQualityGate(channelName, subscriberCount)) continue;
 

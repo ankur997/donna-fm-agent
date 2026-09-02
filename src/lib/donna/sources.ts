@@ -240,17 +240,76 @@ export function looksLikeEntertainment(title: string, description: string): bool
   return ENTERTAINMENT_KEYWORDS.some((k) => text.includes(k));
 }
 
-// ── Language filter ────────────────────────────────────────────────────────────
-// Reject videos/channels whose titles contain non-Latin scripts.
-// Covers Tamil (0B80-0BFF), Malayalam (0D00-0D7F), Telugu (0C00-0C7F),
-// Kannada (0C80-0CFF), Devanagari/Hindi (0900-097F), Bengali (0980-09FF),
-// Gujarati (0A80-0AFF), Punjabi/Gurmukhi (0A00-0A7F), Arabic (0600-06FF),
-// Chinese/CJK (4E00-9FFF), and other common non-Latin blocks.
-const NON_LATIN_PATTERN = /[\u0900-\u097F\u0980-\u09FF\u0A00-\u0A7F\u0A80-\u0AFF\u0B00-\u0B7F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F\u0600-\u06FF\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF]/;
+// -- Language filter ----------------------------------------------------------
+// Reject videos/channels whose titles are written in a non-Latin script.
+//
+// 2026-09-02: a Russian video ("ЛИПСИЦ: ИНТЕРВЬЮ ЯНУ МОРАВИЦКОМУ", channel
+// "ИГОРЬ ЛИПСИЦ", 342k views) sailed through and got recommended. Cause: the
+// original pattern covered the Indic scripts, Arabic and CJK but had no
+// Cyrillic range at all. Cyrillic and the other missing scripts are added
+// below, so this is now a real "is this Latin script" test rather than a list
+// of the scripts that happened to have bitten us before.
+//
+// Covers: Greek (0370-03FF), Cyrillic (0400-04FF + supplement 0500-052F),
+// Armenian (0530-058F), Hebrew (0590-05FF), Arabic (0600-06FF),
+// Devanagari (0900-097F), Bengali (0980-09FF), Gurmukhi (0A00-0A7F),
+// Gujarati (0A80-0AFF), Oriya (0B00-0B7F), Tamil (0B80-0BFF),
+// Telugu (0C00-0C7F), Kannada (0C80-0CFF), Malayalam (0D00-0D7F),
+// Sinhala (0D80-0DFF), Thai (0E00-0E7F), Lao (0E80-0EFF), Tibetan (0F00-0FFF),
+// Myanmar (1000-109F), Georgian (10A0-10FF), Hangul Jamo (1100-11FF),
+// Ethiopic (1200-137F), Khmer (1780-17FF), Japanese kana (3040-30FF),
+// Hangul compat (3130-318F), CJK (4E00-9FFF), Hangul syllables (AC00-D7AF).
+const NON_LATIN_PATTERN =
+  /[Ͱ-ϿЀ-ӿԀ-ԯ԰-֏֐-׿؀-ۿऀ-ॿঀ-৿਀-੿઀-૿଀-୿஀-௿ఀ-౿ಀ-೿ഀ-ൿ඀-෿฀-๿຀-໿ༀ-࿿က-႟Ⴀ-ჿᄀ-ᇿሀ-፿ក-៿぀-ゟ゠-ヿ㄰-㆏一-鿿가-힯]/g;
 
-/** Returns true if title or channelName contains non-Latin script characters. */
-export function looksLikeNonEnglish(title: string, channelName: string): boolean {
-  return NON_LATIN_PATTERN.test(title) || NON_LATIN_PATTERN.test(channelName);
+/**
+ * Count non-Latin characters. The threshold below is two, not one: a single
+ * stray glyph is usually notation in an otherwise English title -- "pi", a
+ * Greek letter in a maths title, a Chinese company name inside an English
+ * headline -- and rejecting those would throw away good content. A genuinely
+ * foreign-language title always carries many.
+ */
+function nonLatinCount(text: string): number {
+  return (text || "").match(NON_LATIN_PATTERN)?.length ?? 0;
+}
+
+/** English language codes we accept from YouTube's declared-language fields. */
+function isEnglishLangCode(code?: string | null): boolean {
+  if (!code) return false;
+  return code.toLowerCase().split("-")[0] === "en";
+}
+
+/**
+ * Returns true if this looks like non-English content.
+ *
+ * Two independent tests, because each catches what the other cannot:
+ *  1. Script -- a non-Latin title or channel name (Russian, Hindi, CJK...).
+ *  2. YouTube's own declared language (`defaultAudioLanguage` /
+ *     `defaultLanguage`). This is the authoritative signal, and it was already
+ *     present in the videos.list snippet and being thrown away -- the Russian
+ *     video that got through was explicitly tagged "ru". It also catches
+ *     Latin-script foreign languages (Spanish, Portuguese, German, Turkish,
+ *     Indonesian) that no script test can ever detect.
+ *
+ * A MISSING declared language is not treated as non-English: plenty of
+ * legitimate English uploads leave the field unset, so rejecting nulls would
+ * gut the candidate pool. In that case the script test stands on its own.
+ */
+export function looksLikeNonEnglish(
+  title: string,
+  channelName: string,
+  declaredLanguage?: string | null
+): boolean {
+  // An explicit language tag is authoritative in BOTH directions, so it is
+  // checked first. A declared "en" therefore overrides the script heuristic:
+  // an English video whose title quotes a Chinese company name or a Greek
+  // symbol is still English. (Caught by the unit test in langtest --
+  // "Alibaba and Tencent: ... strategy explained" was being rejected on the
+  // strength of four CJK characters despite being tagged en.)
+  if (declaredLanguage) return !isEnglishLangCode(declaredLanguage);
+
+  // No tag: fall back to the script test.
+  return nonLatinCount(title) >= 2 || nonLatinCount(channelName) >= 2;
 }
 
 // ── AI hard-cap detection ───────────────────────────────────────────────────────
