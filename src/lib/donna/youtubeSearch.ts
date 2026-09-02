@@ -11,6 +11,14 @@ import {
   looksLikeEntertainment,
   looksLikeNonEnglish,
 } from "./sources";
+import {
+  allowance,
+  recordCalls,
+  markExhausted,
+  resetHint,
+  QuotaBudgetError,
+  QuotaExhaustedError,
+} from "./quotaBudget.js";
 
 const YOUTUBE_API = "https://www.googleapis.com/youtube/v3";
 
@@ -36,12 +44,20 @@ function parseDuration(iso: string): number {
   return parseInt(m[1] || "0") * 3600 + parseInt(m[2] || "0") * 60 + parseInt(m[3] || "0");
 }
 
-async function ytGet<T>(path: string, token: string): Promise<T | null> {
+/** Per-call outcome flags, so the caller can tell quota 429s from other failures. */
+interface CallStats { quota429: boolean; }
+
+async function ytGet<T>(path: string, token: string, stats?: CallStats): Promise<T | null> {
   try {
     const res = await fetch(`${YOUTUBE_API}${path}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
+      // A 429 here is the daily search-quota ceiling, not a transient blip —
+      // recording it lets us fail loudly and honestly instead of reporting
+      // "no content available" (the misleading message that hid the
+      // 2026-09-01 evening / 2026-09-02 morning misses).
+      if (res.status === 429 && stats) stats.quota429 = true;
       console.warn(`[DonnaFM/search] ${res.status} on ${path.slice(0, 60)}`);
       return null;
     }
@@ -76,8 +92,10 @@ interface ChannelListItem {
  */
 export async function searchYouTubeCandidates(
   queries: string[],
-  perQuery = 25
+  perQuery = 25,
+  opts: { scheduled?: boolean } = {}
 ): Promise<SearchedVideo[]> {
+  const scheduled = opts.scheduled === true;
   const token = await getRefreshedYouTubeToken();
   if (!token) {
     console.warn("[DonnaFM/search] No YouTube token — cannot search");
@@ -108,7 +126,32 @@ export async function searchYouTubeCandidates(
   // Google's low default tier). Queries are interleaved across followed-people/
   // taste/topic in send.ts's buildQueries() before this cap is applied, so every
   // group still gets a fair slice regardless of the cap's exact value.
-  const uniqueQueries = Array.from(new Set(queries.filter(Boolean))).slice(0, 30);
+  const QUERY_CAP = 30;
+  let uniqueQueries = Array.from(new Set(queries.filter(Boolean))).slice(0, QUERY_CAP);
+
+  // Budget guard (added 2026-09-02 after manual dry-runs starved two scheduled
+  // pushes). A manual run may only ever spend the non-reserved slice of the
+  // window; a scheduled run may use the rest. Refusing loudly here is far better
+  // than making the calls, collecting 429s, and reporting "no content".
+  const budget = allowance(scheduled);
+  if (budget <= 0) {
+    throw new QuotaBudgetError(
+      scheduled
+        ? `YouTube daily search quota already spent for this window — ${resetHint()}.`
+        : `Manual-run search allowance for this quota window is used up. ` +
+          `The remaining calls are reserved for the scheduled 9 AM / 7 PM pushes — ${resetHint()}.`
+    );
+  }
+  if (budget < uniqueQueries.length) {
+    console.warn(
+      `[DonnaFM/search] trimming ${uniqueQueries.length} → ${budget} queries to stay inside the quota budget`
+    );
+    uniqueQueries = uniqueQueries.slice(0, budget);
+  }
+
+  const stats: CallStats = { quota429: false };
+  let callsMade = 0;
+
   for (let i = 0; i < uniqueQueries.length; i++) {
     const q = uniqueQueries[i];
     // Small spacing between sequential search calls — a burst of ~18-27 calls in
@@ -120,13 +163,25 @@ export async function searchYouTubeCandidates(
       `/search?part=snippet&type=video&order=viewCount&relevanceLanguage=en` +
         `&publishedAfter=${encodeURIComponent(publishedAfter)}` +
         `&maxResults=${perQuery}&q=${encodeURIComponent(q)}`,
-      token
+      token,
+      stats
     );
+    callsMade++;
+    // Stop the moment the API says we're out — hammering out the remaining
+    // queries just burns time and logs 30 identical 429s (as it did on 09-02).
+    if (stats.quota429) {
+      markExhausted();
+      throw new QuotaExhaustedError(
+        `YouTube API daily search quota exhausted (limit: 100 search calls/day for this project) — ${resetHint()}.`
+      );
+    }
     for (const it of data?.items ?? []) {
       const vid = it.id?.videoId;
       if (vid) idSet.add(vid);
     }
   }
+  recordCalls(callsMade);
+
   const ids = Array.from(idSet);
   if (ids.length === 0) return [];
 

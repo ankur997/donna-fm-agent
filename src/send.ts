@@ -19,9 +19,10 @@ import {
 import { searchYouTubeCandidates } from "./lib/donna/youtubeSearch.js";
 import { getTasteProfile } from "./lib/donna/tasteProfile.js";
 import { TOPIC_QUERIES, followedPeopleQueries } from "./lib/donna/sources.js";
+import { QuotaExhaustedError, QuotaBudgetError } from "./lib/donna/quotaBudget.js";
 import { logYouTubeItem, extractVideoId } from "./lib/donna/youtube-log.js";
 
-async function sendTwilioWhatsApp(to: string, body: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendTwilioWhatsApp(to: string, body: string): Promise<{ ok: boolean; error?: string }> {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   const from = process.env.TWILIO_WHATSAPP_FROM;
@@ -82,11 +83,14 @@ export interface SendResult {
   error?: string;
   items?: RecommendationItem[];
   candidatesConsidered?: number;
+  /** True when the run died on the YouTube daily search quota, not on content. */
+  quotaExhausted?: boolean;
 }
 
 export async function sendRecommendations(
   slot: "morning" | "evening",
-  dryRun = false
+  dryRun = false,
+  opts: { scheduled?: boolean } = {}
 ): Promise<SendResult> {
   const to = process.env.USER_WHATSAPP_NUMBER;
   if (!to && !dryRun) {
@@ -104,7 +108,7 @@ export async function sendRecommendations(
 
     // ── Search YouTube (topics + taste) ──────────────────────────────────────
     const queries = await buildQueries();
-    const found = await searchYouTubeCandidates(queries);
+    const found = await searchYouTubeCandidates(queries, 25, { scheduled: opts.scheduled === true });
 
     const candidates: CurationCandidate[] = found.map((v) => ({
       title: v.title,
@@ -168,6 +172,12 @@ export async function sendRecommendations(
     return { ok: true, slot, items };
   } catch (err) {
     console.error("[DonnaFM] Error:", err);
+    // Quota failures get their own honest label. Reporting them as generic
+    // errors (or worse, as "No content available to curate") is what made the
+    // 2026-09-01 / 09-02 misses take a full RCA to explain.
+    if (err instanceof QuotaExhaustedError || err instanceof QuotaBudgetError) {
+      return { ok: false, slot, quotaExhausted: true, error: err.message };
+    }
     return { ok: false, slot, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }
